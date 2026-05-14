@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vocabulario 🇪🇸</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #fff; color: #1a1a1a; }
+    :root {
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --color-text-primary: #1a1a1a;
+      --color-text-secondary: #6b7280;
+      --color-background-primary: #ffffff;
+      --color-background-secondary: #f9fafb;
+      --color-border-tertiary: #e5e7eb;
+      --color-border-secondary: #d1d5db;
+    }
+    .tab-bar{display:flex;border-bottom:0.5px solid #e5e7eb;margin-bottom:2rem;}
+    .tab{padding:10px 20px;font-size:14px;cursor:pointer;border:none;background:none;color:#6b7280;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s;font-family:var(--font-sans);}
+    .tab.active{color:#1a1a1a;border-bottom-color:#1a1a1a;font-weight:500;}
+    .pill{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11px;font-weight:500;}
+    .imod{width:100%;padding:12px 18px;font-size:15px;border:1.5px solid #d1d5db;border-radius:12px;background:#fff;color:#1a1a1a;outline:none;transition:border-color .15s,box-shadow .15s;font-family:var(--font-sans);}
+    .imod:focus{border-color:#6C63FF;box-shadow:0 0 0 3px rgba(108,99,255,.12);}
+    .imod.wrong{border-color:#EF4444;box-shadow:0 0 0 3px rgba(239,68,68,.12);}
+    .imod.center{text-align:center;font-size:20px;}
+    .btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;border:1.5px solid #d1d5db;background:#fff;color:#1a1a1a;transition:background .12s,transform .08s;font-family:var(--font-sans);}
+    .btn:hover{background:#f9fafb;}
+    .btn:active{transform:scale(0.97);}
+    .btn:disabled{opacity:.4;cursor:not-allowed;}
+    .btn-primary{background:#6C63FF;color:#fff;border-color:#6C63FF;}
+    .btn-primary:hover{background:#5A52E0;}
+    .btn-success{background:#10B981;color:#fff;border-color:#10B981;}
+    .btn-danger{background:#EF4444;color:#fff;border-color:#EF4444;}
+    .btn-sm{padding:5px 11px;font-size:12px;border-radius:8px;}
+    .wt{width:100%;border-collapse:collapse;font-size:14px;table-layout:fixed;}
+    .wt th{padding:9px 14px;text-align:left;font-weight:500;font-size:13px;color:#6b7280;background:#f9fafb;}
+    .wt td{padding:9px 14px;border-top:0.5px solid #e5e7eb;vertical-align:middle;}
+    .wt tr:hover td{background:#f9fafb;}
+    .sel{padding:8px 12px;border-radius:10px;border:1.5px solid #d1d5db;background:#fff;color:#1a1a1a;font-size:13px;font-family:var(--font-sans);outline:none;}
+    .toast{position:fixed;top:18px;left:50%;transform:translateX(-50%);padding:9px 20px;border-radius:10px;font-size:14px;font-weight:500;z-index:9999;}
+    .toast-err{background:#EF4444;color:#fff;}
+    .toast-ok{background:#10B981;color:#fff;}
+    .tries-dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin:0 3px;}
+    .row-action{background:none;border:none;cursor:pointer;font-size:12px;color:#C8C8C8;font-family:var(--font-sans);padding:2px 6px;border-radius:4px;transition:color .12s;}
+    .row-action:hover{color:#1a1a1a;}
+    .row-action.del:hover{color:#EF4444;}
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const STORAGE_KEY = "sv2-words";
+    const PROGRESS_KEY = "sv2-progress";
+    const POS_LABELS = { verb:"Verb", noun:"Noun", adjective:"Adjective", adverb:"Adverb", phrase:"Phrase", other:"Other" };
+    const POS_COLORS = { verb:"#6C63FF", noun:"#0EA5E9", adjective:"#10B981", adverb:"#F59E0B", phrase:"#EC4899", other:"#8B8B8B" };
+    const PTYPES = { flashcard:"flashcard", typing:"typing", speed:"speed" };
+    const ACCENTS = {
+      fr: ["é","è","ê","ë","à","â","ù","û","ü","î","ï","ô","œ","æ","ç"],
+      en: [],
+      es: ["á","é","í","ó","ú","ü","ñ","¿","¡"],
+      mixed: ["é","è","ê","ë","à","â","ù","û","ü","î","ï","ô","œ","æ","ç","á","í","ó","ú","ñ"],
+    };
+
+    function getNextReview(correct, interval){
+      return Date.now() + (correct ? Math.max(1, interval * 2.5) : 1) * 3600000;
+    }
+
+    async function translateWord(es){
+      const res = await fetch("/api/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ es })
+      });
+      try { return await res.json(); }
+      catch { return { es, fr: "", en: "", pos: "other" }; }
+    }
+
+    function InlineSelect({ value, options, onChange }) {
+      const [open, setOpen] = useState(false);
+      const ref = useRef(null);
+      useEffect(() => {
+        if (!open) return;
+        const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+        document.addEventListener("mousedown", h);
+        return () => document.removeEventListener("mousedown", h);
+      }, [open]);
+      const label = options.find(([k]) => k === value)?.[1] || value;
+      return (
+        <span ref={ref} style={{ position: "relative", display: "inline-block" }}>
+          <span onClick={() => setOpen(o => !o)} style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "#EEEDFE", color: "#534AB7", borderRadius: 8, padding: "3px 10px", fontSize: 13, fontWeight: 500, cursor: "pointer", userSelect: "none" }}>
+            {label}<span style={{ fontSize: 10, opacity: .7 }}>▾</span>
+          </span>
+          {open && (
+            <span style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 300, background: "#fff", border: "0.5px solid #d1d5db", borderRadius: 12, boxShadow: "0 4px 20px rgba(0,0,0,.10)", display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 150, whiteSpace: "nowrap" }}>
+              {options.map(([k, l]) => (
+                <span key={k} onClick={() => { onChange(k); setOpen(false); }}
+                  style={{ padding: "9px 14px", fontSize: 13, cursor: "pointer", color: k === value ? "#534AB7" : "#1a1a1a", fontWeight: k === value ? 500 : 400 }}
+                  onMouseEnter={e => e.currentTarget.style.background = "#f9fafb"}
+                  onMouseLeave={e => e.currentTarget.style.background = "none"}>
+                  {l}
+                </span>
+              ))}
+            </span>
+          )}
+        </span>
+      );
+    }
+
+    function AccentBar({ lang, onInsert }) {
+      const chars = ACCENTS[lang] || [];
+      if (!chars.length) return null;
+      return (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 10 }}>
+          {chars.map(c => (
+            <button key={c} onMouseDown={e => { e.preventDefault(); onInsert(c); }}
+              style={{ padding: "4px 9px", borderRadius: 7, border: "1px solid #E0E0E0", background: "#F5F5F5", fontSize: 14, cursor: "pointer", fontFamily: "var(--font-sans)", color: "#1a1a1a" }}
+              onMouseEnter={e => e.currentTarget.style.background = "#E8E8E8"}
+              onMouseLeave={e => e.currentTarget.style.background = "#F5F5F5"}>
+              {c}
+            </button>
+          ))}
+        </div>
+      );
+    }
+
+    function PracticeSetup({ words, onStart }) {
+      const [practicePOS, setPracticePOS] = useState("all");
+      const [practiceLang, setPracticeLang] = useState("fr");
+      const [dir, setDir] = useState("es_to_tr");
+
+      const posOptions = [["all", "All words"], ...Object.entries(POS_LABELS).map(([k, v]) => [k, v])];
+      const langOptions = [["fr", "French"], ["en", "English"], ["mixed", "Mixed"]];
+      const dirOptions = practiceLang === "fr"
+        ? [["es_to_tr", "ES → FR"], ["tr_to_es", "FR → ES"]]
+        : practiceLang === "en"
+        ? [["es_to_tr", "ES → EN"], ["tr_to_es", "EN → ES"]]
+        : [["es_to_tr", "ES → translate"], ["tr_to_es", "translate → ES"]];
+
+      const settings = [
+        { label: "Type", opts: posOptions, val: practicePOS, set: setPracticePOS },
+        { label: "Language", opts: langOptions, val: practiceLang, set: v => { setPracticeLang(v); setDir("es_to_tr"); } },
+        { label: "Direction", opts: dirOptions, val: dir, set: setDir },
+      ];
+
+      const modes = [
+        { type: PTYPES.flashcard, emoji: "🃏", label: "Flashcards", desc: "Flip the card, rate yourself" },
+        { type: PTYPES.typing, emoji: "⌨️", label: "Typing", desc: "Type the translation from memory" },
+        { type: PTYPES.speed, emoji: "⚡", label: "Speed", desc: "60 seconds, go fast" },
+      ];
+
+      return (
+        <div>
+          <div style={{ marginBottom: 16 }}>
+            {settings.map((s, i) => (
+              <div key={s.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "13px 0", borderBottom: i < settings.length - 1 ? "1px solid #E0E0E0" : "none" }}>
+                <span style={{ fontSize: 13, color: "#6b7280" }}>{s.label}</span>
+                <InlineSelect value={s.val} options={s.opts} onChange={s.set} />
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+            {modes.map(m => (
+              <button key={m.type} onClick={() => onStart(m.type, practicePOS, practiceLang, dir)} disabled={words.length === 0}
+                style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", padding: "20px 12px", background: "#F5F5F5", border: "1px solid #E0E0E0", borderRadius: 14, cursor: words.length === 0 ? "not-allowed" : "pointer", opacity: words.length === 0 ? 0.4 : 1, transition: "background .15s, transform .1s", fontFamily: "var(--font-sans)" }}
+                onMouseEnter={e => { if (words.length) e.currentTarget.style.background = "#EBEBEB"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "#F5F5F5"; }}
+                onMouseDown={e => { e.currentTarget.style.transform = "scale(0.97)"; }}
+                onMouseUp={e => { e.currentTarget.style.transform = "scale(1)"; }}>
+                <span style={{ fontSize: 26, marginBottom: 8 }}>{m.emoji}</span>
+                <span style={{ fontSize: 13, fontWeight: 500, color: "#1a1a1a", marginBottom: 4 }}>{m.label}</span>
+                <span style={{ fontSize: 11, color: "#6b7280", marginBottom: 14 }}>{m.desc}</span>
+                <span style={{ fontSize: 12, color: "#6C63FF", fontWeight: 500 }}>Start →</span>
+              </button>
+            ))}
+          </div>
+          {words.length === 0 && <p style={{ fontSize: 13, color: "#6b7280", textAlign: "center", marginTop: 12 }}>Add words in the Library tab first.</p>}
+        </div>
+      );
+    }
+
+    function PracticeSession({ words }) {
+      const [started, setStarted] = useState(false);
+      const [ptype, setPtype] = useState(null);
+      const [practiceLang, setPracticeLang] = useState("fr");
+      const [dir, setDir] = useState("es_to_tr");
+      const [queue, setQueue] = useState([]);
+      const [qIdx, setQIdx] = useState(0);
+      const [tries, setTries] = useState(0);
+      const [typed, setTyped] = useState("");
+      const [sessionState, setSessionState] = useState("idle");
+      const [stats, setStats] = useState({ correct: 0, wrong: 0 });
+      const [speedActive, setSpeedActive] = useState(false);
+      const [timeLeft, setTimeLeft] = useState(60);
+      const [progress, setProgress] = useState({});
+      const [speedMistakes, setSpeedMistakes] = useState([]);
+      const inputRef = useRef(null);
+      const dirRef = useRef("es_to_tr");
+      const langRef = useRef("fr");
+
+      useEffect(() => { try { const p = localStorage.getItem(PROGRESS_KEY); if (p) setProgress(JSON.parse(p)); } catch {} }, []);
+
+      useEffect(() => {
+        if (ptype === PTYPES.speed && speedActive) {
+          if (timeLeft <= 0) { setSpeedActive(false); return; }
+          const t = setTimeout(() => setTimeLeft(l => l - 1), 1000);
+          return () => clearTimeout(t);
+        }
+      }, [timeLeft, speedActive, ptype]);
+
+      const handleStart = (type, pos, lang, d) => {
+        let pool = words.filter(w => pos === "all" || w.pos === pos);
+        if (lang !== "mixed") pool = pool.filter(w => w[lang]);
+        else pool = pool.filter(w => w.fr || w.en);
+        if (!pool.length) return;
+        const q = [...pool].sort(() => Math.random() - 0.5);
+        dirRef.current = d; langRef.current = lang;
+        setPtype(type); setPracticeLang(lang); setDir(d);
+        setQueue(q); setQIdx(0); setTries(0); setTyped(""); setSessionState("idle");
+        setStats({ correct: 0, wrong: 0 }); setSpeedMistakes([]); setStarted(true);
+        if (type === PTYPES.speed) { setTimeLeft(60); setSpeedActive(false); }
+      };
+
+      const getPA = (word, lang, d) => {
+        const tr = lang === "mixed" ? (word.fr || word.en) : word[lang];
+        const trLang = lang === "mixed" ? (word.fr ? "fr" : "en") : lang;
+        return d === "es_to_tr"
+          ? { prompt: word.es, promptLang: "es", answer: tr, answerLang: trLang }
+          : { prompt: tr, promptLang: trLang, answer: word.es, answerLang: "es" };
+      };
+
+      const ll = l => l === "es" ? "🇪🇸 Spanish" : l === "fr" ? "🇫🇷 French" : "🇬🇧 English";
+
+      const recordProgress = (word, correct) => {
+        setProgress(prev => {
+          const p = prev[word.id] || { correct: 0, wrong: 0, interval: 1, nextReview: 0 };
+          const next = { ...prev, [word.id]: { correct: p.correct + (correct ? 1 : 0), wrong: p.wrong + (correct ? 0 : 1), interval: correct ? p.interval * 2.5 : 1, nextReview: getNextReview(correct, p.interval) } };
+          try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(next)); } catch {}
+          return next;
+        });
+        setStats(s => ({ correct: s.correct + (correct ? 1 : 0), wrong: s.wrong + (correct ? 0 : 1) }));
+      };
+
+      const splitAlts = s => (s || "").split(/[\/,]/).map(x => x.trim().toLowerCase()).filter(Boolean);
+
+      const checkCorrect = (word, answer) => {
+        const valid = dirRef.current === "es_to_tr"
+          ? [...splitAlts(word.fr), ...splitAlts(word.en)]
+          : splitAlts(word.es);
+        return valid.includes(answer.trim().toLowerCase());
+      };
+
+      const insertAccent = char => {
+        const el = inputRef.current;
+        if (!el) return;
+        const start = el.selectionStart;
+        const end = el.selectionEnd;
+        const newVal = typed.slice(0, start) + char + typed.slice(end);
+        setTyped(newVal);
+        setTimeout(() => { el.focus(); el.setSelectionRange(start + 1, start + 1); }, 0);
+      };
+
+      const handleSpeedKey = e => {
+        if (e.key !== "Enter") return;
+        const cur = queue[qIdx % queue.length];
+        const correct = checkCorrect(cur, typed);
+        recordProgress(cur, correct);
+        if (!correct) {
+          const pa = getPA(cur, langRef.current, dirRef.current);
+          setSpeedMistakes(m => [...m, { word: cur, typed, correctAnswer: pa.answer }]);
+        }
+        setQIdx(i => (i + 1) % queue.length);
+        setTyped("");
+      };
+
+      const checkAnswer = () => {
+        if (!current || sessionState === "correct" || sessionState === "revealed") return;
+        if (checkCorrect(current, typed)) {
+          setSessionState("correct"); recordProgress(current, true);
+        } else {
+          const nt = tries + 1; setTries(nt); setSessionState("wrong");
+          if (nt >= 3) { setSessionState("revealed"); recordProgress(current, false); }
+        }
+      };
+
+      const showAnswer = () => { setSessionState("revealed"); recordProgress(current, false); };
+
+      const nextWord = () => {
+        setQIdx(i => (i + 1) % queue.length);
+        setTries(0); setTyped(""); setSessionState("idle");
+        setTimeout(() => inputRef.current?.focus(), 50);
+      };
+
+      if (!started) return <PracticeSetup words={words} onStart={handleStart} />;
+
+      const current = queue[qIdx % queue.length];
+      const pa = current ? getPA(current, practiceLang, dir) : null;
+      const isSpeed = ptype === PTYPES.speed;
+      const isFlashcard = ptype === PTYPES.flashcard;
+      const isTyping = ptype === PTYPES.typing;
+      const ptLabel = { flashcard: "Flashcards", typing: "Typing", speed: "Speed" }[ptype];
+
+      const PromptCard = ({ word, pa }) => (
+        <div style={{ background: "#fff", border: "0.5px solid #e5e7eb", borderRadius: 16, padding: "2.5rem 2rem", textAlign: "center", marginBottom: "1.25rem" }}>
+          <p style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: ".08em", color: "#6b7280", marginBottom: 12 }}>{ll(pa.promptLang)}</p>
+          <p style={{ fontSize: 32, fontWeight: 500 }}>{pa.prompt}</p>
+          {word?.pos && <span className="pill" style={{ marginTop: 14, display: "inline-block", background: POS_COLORS[word.pos] + "22", color: POS_COLORS[word.pos] }}>{POS_LABELS[word.pos]}</span>}
+        </div>
+      );
+
+      return (
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: "1.5rem" }}>
+            <button className="btn btn-sm" onClick={() => setStarted(false)}>← Back</button>
+            <span style={{ fontSize: 13, color: "#6b7280" }}>{ptLabel}</span>
+            <span style={{ marginLeft: "auto", fontSize: 13 }}>
+              <span style={{ color: "#10B981", fontWeight: 500 }}>{stats.correct}</span>
+              <span style={{ color: "#6b7280" }}> correct · </span>
+              <span style={{ color: "#EF4444", fontWeight: 500 }}>{stats.wrong}</span>
+              <span style={{ color: "#6b7280" }}> wrong</span>
+            </span>
+            {isSpeed && <span style={{ fontSize: 14, fontWeight: 500, color: timeLeft < 10 ? "#EF4444" : "#1a1a1a" }}>{timeLeft}s</span>}
+          </div>
+
+          {isSpeed && !speedActive && timeLeft > 0 && (
+            <div style={{ textAlign: "center", padding: "3rem 0" }}>
+              <p style={{ fontSize: 16, color: "#6b7280", marginBottom: "1.5rem" }}>60 seconds. Type as many as you can. Press Enter for the next word.</p>
+              <button className="btn btn-primary" onClick={() => setSpeedActive(true)}>Start</button>
+            </div>
+          )}
+
+          {isSpeed && timeLeft <= 0 && (
+            <div>
+              <div style={{ textAlign: "center", padding: "1.5rem 0" }}>
+                <p style={{ fontSize: 22, fontWeight: 500, marginBottom: 6 }}>Time's up!</p>
+                <p style={{ color: "#6b7280", marginBottom: "1.5rem" }}>{stats.correct} correct · {stats.wrong} wrong</p>
+              </div>
+              {speedMistakes.length > 0 && (
+                <div style={{ marginBottom: "1.5rem" }}>
+                  <p style={{ fontSize: 12, fontWeight: 500, marginBottom: 10, color: "#6b7280", textTransform: "uppercase", letterSpacing: ".06em" }}>Mistakes</p>
+                  <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 12, overflow: "hidden" }}>
+                    {speedMistakes.map((m, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderTop: i > 0 ? "0.5px solid #e5e7eb" : "none", fontSize: 13 }}>
+                        <span style={{ fontWeight: 500, flex: 1 }}>{m.word.es}</span>
+                        <span style={{ color: "#EF4444", textDecoration: "line-through", flex: 1 }}>{m.typed || "—"}</span>
+                        <span style={{ color: "#10B981", flex: 1 }}>{m.correctAnswer}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div style={{ textAlign: "center" }}>
+                <button className="btn btn-primary" onClick={() => setStarted(false)}>Done</button>
+              </div>
+            </div>
+          )}
+
+          {isSpeed && speedActive && timeLeft > 0 && pa && (
+            <div>
+              <PromptCard word={current} pa={pa} />
+              <input ref={inputRef} className="imod center" autoFocus
+                placeholder={`Type in ${ll(pa.answerLang).replace(/🇪🇸 |🇫🇷 |🇬🇧 /, "")}… then Enter`}
+                value={typed} onChange={e => setTyped(e.target.value)}
+                onKeyDown={handleSpeedKey} />
+            </div>
+          )}
+
+          {isTyping && pa && (
+            <div>
+              <PromptCard word={current} pa={pa} />
+              {tries > 0 && sessionState !== "correct" && (
+                <div style={{ textAlign: "center", marginBottom: 12 }}>
+                  {[0, 1, 2].map(i => <span key={i} className="tries-dot" style={{ background: i < tries ? "#EF4444" : "#d1d5db" }}></span>)}
+                  {sessionState !== "revealed" && <span style={{ fontSize: 12, color: "#EF4444", marginLeft: 8 }}>{3 - tries} {3 - tries === 1 ? "try" : "tries"} left</span>}
+                </div>
+              )}
+              {(sessionState === "revealed" || sessionState === "correct") && (
+                <div style={{ background: sessionState === "correct" ? "rgba(16,185,129,.08)" : "rgba(239,68,68,.08)", border: `1.5px solid ${sessionState === "correct" ? "#10B981" : "#EF4444"}`, borderRadius: 14, padding: "1rem 1.5rem", textAlign: "center", marginBottom: "1rem" }}>
+                  <p style={{ fontSize: 12, color: sessionState === "correct" ? "#10B981" : "#EF4444", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 6 }}>{sessionState === "correct" ? "Correct!" : "The answer was"}</p>
+                  <p style={{ fontSize: 22, fontWeight: 500 }}>{pa.answer}</p>
+                  {sessionState !== "correct" && dir === "es_to_tr" && (() => { const alt = pa.answerLang === "fr" ? current.en : current.fr; return alt ? <p style={{ fontSize: 14, color: "#6b7280", marginTop: 6 }}>Also: {alt}</p> : null; })()}
+                </div>
+              )}
+              {sessionState !== "revealed" && sessionState !== "correct" && (
+                <div style={{ marginBottom: "1rem" }}>
+                  <AccentBar lang={pa.answerLang} onInsert={insertAccent} />
+                  <input ref={inputRef} className={`imod center${sessionState === "wrong" ? " wrong" : ""}`}
+                    placeholder={`Type in ${ll(pa.answerLang).replace(/🇪🇸 |🇫🇷 |🇬🇧 /, "")}…`}
+                    value={typed} onChange={e => setTyped(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && checkAnswer()} autoFocus />
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 10, justifyContent: "center", alignItems: "center" }}>
+                {sessionState === "idle" && <button className="btn btn-primary" onClick={checkAnswer} disabled={!typed.trim()}>Check</button>}
+                {sessionState === "idle" && <span onClick={showAnswer} style={{ fontSize: 12, color: "#C8C8C8", cursor: "pointer", userSelect: "none" }}>I don't know</span>}
+                {sessionState === "wrong" && tries < 3 && <button className="btn btn-primary" onClick={() => { setTyped(""); setSessionState("idle"); setTimeout(() => inputRef.current?.focus(), 50); }}>Try again</button>}
+                {(sessionState === "correct" || sessionState === "revealed") && <button className="btn btn-primary" onClick={nextWord}>Next →</button>}
+              </div>
+            </div>
+          )}
+
+          {isFlashcard && pa && (
+            <div>
+              <PromptCard word={current} pa={pa} />
+              {(sessionState === "revealed" || sessionState === "correct" || sessionState === "wrong_fc") && (
+                <div style={{ background: sessionState === "correct" ? "rgba(16,185,129,.08)" : "rgba(250,220,80,.13)", border: `1.5px solid ${sessionState === "correct" ? "#10B981" : "#E6C84A"}`, borderRadius: 14, padding: "1rem 1.5rem", textAlign: "center", marginBottom: "1rem" }}>
+                  <p style={{ fontSize: 12, color: sessionState === "correct" ? "#10B981" : "#9A7D0A", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 6 }}>Answer</p>
+                  <p style={{ fontSize: 22, fontWeight: 500 }}>{pa.answer}</p>
+                  {dir === "es_to_tr" && (() => { const alt = pa.answerLang === "fr" ? current.en : current.fr; return alt ? <p style={{ fontSize: 14, color: "#6b7280", marginTop: 6 }}>Also: {alt}</p> : null; })()}
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+                {sessionState === "idle" && <button className="btn" style={{ width: "100%", justifyContent: "center" }} onClick={() => setSessionState("revealed")}>Reveal</button>}
+                {sessionState === "revealed" && (
+                  <>
+                    <button className="btn btn-danger" onClick={() => { recordProgress(current, false); setSessionState("wrong_fc"); }}>Didn't know</button>
+                    <button className="btn btn-success" onClick={() => { recordProgress(current, true); setSessionState("correct"); }}>Knew it</button>
+                  </>
+                )}
+                {(sessionState === "correct" || sessionState === "wrong_fc") && <button className="btn btn-primary" onClick={nextWord}>Next →</button>}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function PreviewCard({ preview, onConfirm, onDiscard }) {
+      const [form, setForm] = useState({ es: preview.es, fr: preview.fr, en: preview.en, pos: preview.pos });
+      return (
+        <div style={{ border: "1px solid #E0E0E0", borderRadius: 14, padding: "1rem 1.25rem", marginBottom: "1rem", background: "#FAFAFA" }}>
+          <p style={{ fontSize: 12, color: "#6b7280", marginBottom: 10, textTransform: "uppercase", letterSpacing: ".06em" }}>Review before saving</p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 10 }}>
+            {[["es","🇪🇸"], ["fr","🇫🇷"], ["en","🇬🇧"]].map(([key, flag]) => (
+              <div key={key}>
+                <label style={{ fontSize: 11, color: "#6b7280", display: "block", marginBottom: 3 }}>{flag}</label>
+                <input className="imod" style={{ padding: "6px 10px", fontSize: 13, borderRadius: 8 }}
+                  value={form[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} />
+              </div>
+            ))}
+            <div>
+              <label style={{ fontSize: 11, color: "#6b7280", display: "block", marginBottom: 3 }}>Type</label>
+              <select className="sel" style={{ width: "100%", padding: "6px 8px", fontSize: 12 }} value={form.pos} onChange={e => setForm(f => ({ ...f, pos: e.target.value }))}>
+                {Object.entries(POS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-primary btn-sm" onClick={() => onConfirm(form)}>Save</button>
+            <button className="btn btn-sm" onClick={onDiscard}>Discard</button>
+          </div>
+        </div>
+      );
+    }
+
+    function App() {
+      const [tab, setTab] = useState("library");
+      const [words, setWords] = useState([]);
+      const [toast, setToast] = useState(null);
+      const [esInput, setEsInput] = useState("");
+      const [translating, setTranslating] = useState(false);
+      const [preview, setPreview] = useState(null);
+      const [search, setSearch] = useState("");
+      const [filterPOS, setFilterPOS] = useState("all");
+      const [editId, setEditId] = useState(null);
+      const [editForm, setEditForm] = useState({ es: "", fr: "", en: "", pos: "other" });
+
+      useEffect(() => { try { const w = localStorage.getItem(STORAGE_KEY); if (w) setWords(JSON.parse(w)); } catch {} }, []);
+      useEffect(() => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(words)); } catch {} }, [words]);
+
+      const showToast = (msg, type = "err") => { setToast({ msg, type }); setTimeout(() => setToast(null), 2500); };
+
+      const fetchPreview = async () => {
+        const es = esInput.trim();
+        if (!es) return;
+        if (words.some(w => w.es.toLowerCase() === es.toLowerCase())) { showToast(`"${es}" is already in your library`); return; }
+        setTranslating(true);
+        const result = await translateWord(es);
+        setPreview({ es: result.es || es, fr: result.fr || "", en: result.en || "", pos: result.pos || "other" });
+        setEsInput("");
+        setTranslating(false);
+      };
+
+      const confirmAdd = form => {
+        setWords(ws => [...ws, { id: Date.now().toString(), ...form }]);
+        setPreview(null);
+        showToast("Word saved!", "ok");
+      };
+
+      const deleteWord = id => setWords(ws => ws.filter(w => w.id !== id));
+      const startEdit = w => { setEditId(w.id); setEditForm({ es: w.es, fr: w.fr || "", en: w.en || "", pos: w.pos || "other" }); };
+      const saveEdit = () => { setWords(ws => ws.map(w => w.id === editId ? { ...w, ...editForm } : w)); setEditId(null); };
+
+      const filtered = words.filter(w =>
+        (filterPOS === "all" || w.pos === filterPOS) &&
+        (w.es?.toLowerCase().includes(search.toLowerCase()) ||
+         w.fr?.toLowerCase().includes(search.toLowerCase()) ||
+         w.en?.toLowerCase().includes(search.toLowerCase()))
+      );
+
+      return (
+        <div style={{ padding: "1.5rem 1.5rem 3rem", maxWidth: 720, margin: "0 auto" }}>
+          {toast && <div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
+          <div style={{ marginBottom: "1.5rem" }}>
+            <span style={{ fontSize: 20, fontWeight: 500 }}>🇪🇸 Vocabulario</span>
+            <span style={{ marginLeft: 12, fontSize: 13, color: "#6b7280" }}>{words.length} words</span>
+          </div>
+          <div className="tab-bar">
+            <button className={`tab${tab === "library" ? " active" : ""}`} onClick={() => setTab("library")}>Library</button>
+            <button className={`tab${tab === "practice" ? " active" : ""}`} onClick={() => setTab("practice")}>Practice</button>
+          </div>
+
+          {tab === "library" && (
+            <div>
+              <div style={{ display: "flex", gap: 8, marginBottom: "1rem" }}>
+                <input className="imod" style={{ flex: 1, padding: "10px 16px", fontSize: 14, borderRadius: 10 }}
+                  placeholder="Type a Spanish word and press Enter…"
+                  value={esInput} onChange={e => setEsInput(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && !translating && fetchPreview()} disabled={translating} />
+                <button className="btn btn-primary" onClick={fetchPreview} disabled={translating || !esInput.trim()}>
+                  {translating ? "Translating…" : "+ Add"}
+                </button>
+              </div>
+              {preview && <PreviewCard preview={preview} onConfirm={confirmAdd} onDiscard={() => setPreview(null)} />}
+              <div style={{ display: "flex", gap: 8, marginBottom: "1rem", flexWrap: "wrap" }}>
+                <input className="imod" style={{ flex: 1, minWidth: 160, padding: "8px 14px", fontSize: 13, borderRadius: 10 }}
+                  placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} />
+                <select className="sel" value={filterPOS} onChange={e => setFilterPOS(e.target.value)}>
+                  <option value="all">All types</option>
+                  {Object.entries(POS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
+              </div>
+              {filtered.length > 0 ? (
+                <div style={{ border: "0.5px solid #e5e7eb", borderRadius: 14, overflow: "hidden" }}>
+                  <table className="wt">
+                    <thead><tr>
+                      <th style={{ width: "22%" }}>🇪🇸 Spanish</th>
+                      <th style={{ width: "22%" }}>🇫🇷 French</th>
+                      <th style={{ width: "22%" }}>🇬🇧 English</th>
+                      <th style={{ width: "16%" }}>Type</th>
+                      <th style={{ width: "18%" }}></th>
+                    </tr></thead>
+                    <tbody>
+                      {filtered.map(w => editId === w.id ? (
+                        <tr key={w.id}>
+                          <td><input className="imod" style={{ padding: "5px 10px", fontSize: 13, borderRadius: 8 }} value={editForm.es} onChange={e => setEditForm(f => ({ ...f, es: e.target.value }))} /></td>
+                          <td><input className="imod" style={{ padding: "5px 10px", fontSize: 13, borderRadius: 8 }} value={editForm.fr} onChange={e => setEditForm(f => ({ ...f, fr: e.target.value }))} /></td>
+                          <td><input className="imod" style={{ padding: "5px 10px", fontSize: 13, borderRadius: 8 }} value={editForm.en} onChange={e => setEditForm(f => ({ ...f, en: e.target.value }))} /></td>
+                          <td>
+                            <select className="sel" style={{ width: "100%", padding: "5px 8px", fontSize: 12 }} value={editForm.pos} onChange={e => setEditForm(f => ({ ...f, pos: e.target.value }))}>
+                              {Object.entries(POS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                            </select>
+                          </td>
+                          <td style={{ textAlign: "right" }}>
+                            <button className="btn btn-sm btn-primary" style={{ marginRight: 4 }} onClick={saveEdit}>Save</button>
+                            <button className="btn btn-sm" onClick={() => setEditId(null)}>Cancel</button>
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr key={w.id}>
+                          <td style={{ fontWeight: 500 }}>{w.es}</td>
+                          <td style={{ color: "#6b7280" }}>{w.fr}</td>
+                          <td style={{ color: "#6b7280" }}>{w.en}</td>
+                          <td><span className="pill" style={{ background: POS_COLORS[w.pos || "other"] + "22", color: POS_COLORS[w.pos || "other"] }}>{POS_LABELS[w.pos || "other"]}</span></td>
+                          <td style={{ textAlign: "right" }}>
+                            <button className="row-action" onClick={() => startEdit(w)}>Edit</button>
+                            <button className="row-action del" onClick={() => deleteWord(w.id)}>Delete</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p style={{ color: "#6b7280", fontSize: 14, textAlign: "center", padding: "2.5rem 0" }}>
+                  {words.length === 0 ? "Add your first word above to get started." : "No words match your search."}
+                </p>
+              )}
+            </div>
+          )}
+          {tab === "practice" && <PracticeSession words={words} />}
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
